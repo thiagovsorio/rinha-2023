@@ -1,0 +1,79 @@
+services:
+  app1: &app
+    build: .
+    hostname: app1
+    network_mode: host
+    environment:
+      DATABASE_URL: "postgres://postgres:postgres@localhost:5432/postgres"
+      MAX_DB_CONNECTIONS: 200
+      PINO_LOG_LEVEL: "debug"
+      LOG: true
+      REQ_TIMEOUT: "2000"
+      NODE_ENV: production
+      PORT: 8082
+    expose:
+      - "8082"
+    depends_on:
+      - postgres
+    ulimits:
+      nproc: 1000000
+      nofile:
+        soft: 1000000
+        hard: 1000000
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: '0.6GB'
+
+  app2:
+    <<: *app
+    hostname: app2
+    environment:
+      PORT: 8083
+      PRINCIPAL: false
+    expose:
+      - "8083"
+
+  postgres:
+    image: postgres
+    command: postgres -c 'max_connections=450' -c 'log_error_verbosity=terse'
+    network_mode: host
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - 5432:5432
+    healthcheck:
+      test: ["CMD", "pg_isready", "-q", "-d", "postgres", "-U", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.4'
+          memory: '1.5GB'
+
+  nginx: 
+    image: nginx:latest
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    network_mode: host
+    depends_on:
+      - app1
+      - app2
+    ports:
+      - "9999:9999"
+    ulimits:
+      nproc: 1000000
+      nofile:
+        soft: 1000000
+        hard: 1000000
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: '0.3GB'
